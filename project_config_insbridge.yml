@@ -1,0 +1,27 @@
+prd:
+  catalog_name: insbridge_mlops_prd
+  schema_name: softrater_packages
+acc:
+  catalog_name: insbridge_mlops_acc
+  schema_name: softrater_packages
+dev:
+  catalog_name: insbridge_mlops_dev
+  schema_name: softrater_packages
+
+
+experiment_name_basic: /Shared/insbridge-packages-basic
+experiment_name_custom: /Shared/insbridge-packages-custom
+
+parameters:
+  learning_rate: 0.01
+  n_estimators: 1000
+  max_depth: 6
+
+
+num_features:
+
+
+cat_features:
+
+
+target: Alive
