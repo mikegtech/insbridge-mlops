@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: ADK Web",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/softrater_packages/flows/srp_hourly.py",
+            "args": [
+                "web"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "AWS_PROFILE": "",
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        }
+    ]
+}

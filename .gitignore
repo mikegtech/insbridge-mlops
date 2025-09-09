@@ -20,3 +20,6 @@ wheels/
 .venv
 temp
 .env
+.databricks/*
+data/*
+docs/data_engineering/*
