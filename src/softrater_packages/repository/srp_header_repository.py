@@ -2,11 +2,12 @@
 
 import shutil
 import uuid
-import zipfile
 from pathlib import Path
 
+import pyzipper
 import xmltodict
 
+from softrater_packages.config import get_config
 from softrater_packages.entities.srp_request import Srp
 
 
@@ -118,6 +119,9 @@ class SrpHeaderRepository:
     @staticmethod
     def get_srp_header(xml_file: str) -> Srp | None:
         print(f"Reading SRP Header from XML file: {xml_file}")
+
+        config = get_config()
+
         with open(xml_file, encoding="utf-8") as f:
             doc = xmltodict.parse(
                 f.read(),
@@ -153,23 +157,28 @@ class SrpHeaderRepository:
         dest.parent.mkdir(parents=True, exist_ok=True)
 
         SrpHeaderRepository().move_files_flat(Path(xml_file).parent, dest.parent, overwrite=True)
+        SrpHeaderRepository().move_files_flat(Path(Path(xml_file).parent / "rtd"), dest.parent, overwrite=True)
+        SrpHeaderRepository().move_files_flat(Path(Path(xml_file).parent / "rto"), dest.parent, overwrite=True)
+
         dest.write_text(xml_str, encoding="utf-8")
 
-        # SrpHeaderRepository().zip_directory(
-        #     dest.parent,
-        #     dest.with_suffix(".srtp"),
-        # )
-
+        SrpHeaderRepository().zip_directory(
+            dest.parent,
+            dest.parent.with_suffix(".srtp"),
+            config.ingest.zip_password if config.ingest else None,
+        )
         print(f"SRP Header parsed successfully: {srp_header.model_dump()}")
+
+        # optionally remove the now-empty subdir
+        try:
+            dest.parent.rmdir()
+        except OSError:
+            pass
 
         return srp_header
 
     @staticmethod
     def move_files_flat(src_subdir: Path, export_dir: Path, overwrite: bool = True) -> None:
-        src_subdir = Path(src_subdir)
-        export_dir = Path(export_dir)
-        export_dir.mkdir(parents=True, exist_ok=True)
-
         for fp in src_subdir.iterdir():  # no recursion needed
             if fp.is_file():
                 dest = export_dir / fp.name
@@ -191,14 +200,15 @@ class SrpHeaderRepository:
         export_dir, zip_path = Path(export_dir), Path(zip_path)
         zip_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        with pyzipper.AESZipFile(zip_path, "w", compression=pyzipper.ZIP_DEFLATED) as zf:
+            # set AES encryption + password
+            if password:
+                zf.setpassword(password.encode("utf-8"))
+                zf.setencryption(pyzipper.WZ_AES, nbits=256)
+
             for fp in export_dir.rglob("*"):
                 if fp.is_file():
-                    # arcname keeps relative path inside the archive
-                    arcname = fp.relative_to(export_dir)
-                    if password:
-                        zf.setpassword(password.encode("utf-8"))
-                    zf.write(fp, arcname)
+                    zf.write(fp, arcname=fp.relative_to(export_dir))
         return zip_path
 
     @staticmethod

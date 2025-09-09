@@ -96,7 +96,7 @@ class IngestConfig(BaseModel):
     staging_dir: Path = Field(default=Path("data/staging"), description="Temporary extraction directory")
     output_dir: Path = Field(default=Path("data/output"), description="Output directory for processed files")
     zip_glob: str = Field(default="*.srp", description="Glob pattern for zip files")
-    zip_password: Optional[str] = Field(default=None, description="Password for encrypted zip files")
+    zip_password: Optional[str] = Field(default="", description="Password for encrypted zip files")
     metadata_filename: str = Field(default="header.xml", description="Metadata file name inside zip")
     metadata_date_key: list[str] = Field(default=["date_created_split"], description="Key in metadata file for date")
     metadata_date_format: str = Field(default="%Y-%m-%d", description="Date format in metadata file")
