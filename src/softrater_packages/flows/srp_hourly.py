@@ -11,6 +11,8 @@ from typing import Any, Optional
 
 from prefect import flow, get_run_logger, task
 
+from softrater_packages.entities.srp_request import Srp
+
 # ZIP (AES optional)
 try:
     import pyzipper
@@ -132,7 +134,7 @@ def extract_zip(zip_path: Path, staging_dir: Path, password: Optional[str]) -> P
 
 
 @task
-def parse_header_with_repo(extract_dir: Path, metadata_filename: str) -> dict:
+def parse_header_with_repo(extract_dir: Path, metadata_filename: str) -> Srp:
     """Use your SrpHeaderRepository to parse header.xml and return a dict (via Pydantic)."""
     matches = list(extract_dir.rglob(metadata_filename))
     if not matches:
@@ -146,18 +148,17 @@ def parse_header_with_repo(extract_dir: Path, metadata_filename: str) -> dict:
     data = _to_dict(srp)  # nested dict from SrpRequest
     # keep a breadcrumb for debugging
     data["_metadata_xml_path"] = str(xml_path.relative_to(extract_dir))
-    return data
+    return srp
 
 
 @task
-def compute_bucket_date_from_srp(srp_data: dict, candidates: list[str], date_fmt: str) -> date:
+def compute_bucket_date_from_srp(srp_data: Srp, candidates: list[str], date_fmt: str) -> date:
     """Prefer explicit SRP fields, then fall back to your generic candidates."""
     # 1) First try 'date_created' / 'date_created_split' directly
-    for key in ("date_created", "date_created_split"):
-        val = srp_data.get(key)
-        d = _parse_us_datetime_with_suffix(val) if isinstance(val, str) else None
-        if d:
-            return d
+    val = srp_data.srpheader.date_created
+    d = _parse_us_datetime_with_suffix(val) if isinstance(val, str) else None
+    if d:
+        return d
 
     # 2) Fallback to the previous flatten + candidates approach
     flat = _flatten(srp_data)
@@ -265,29 +266,30 @@ def zip_to_s3_flow(config: ProjectConfig) -> None:
         print(f"Parsed SRP data: {srp_data}")
 
         # FIX: use config.ingest.metadata_date_keys / metadata_date_format
-        # bucket_date = compute_bucket_date_from_srp(
-        #     srp_data, config.ingest.metadata_date_keys, config.ingest.metadata_date_format
-        # )
+        bucket_date = compute_bucket_date_from_srp(
+            srp_data, config.ingest.metadata_date_key, config.ingest.metadata_date_format
+        )
 
         # # FIX: use output_dir (not config.output_dir)
-        # local_dated = mirror_to_local_output(extracted, output_dir, bucket_date)
+        local_dated = mirror_to_local_output(extracted, output_dir, bucket_date)
 
-        # uploaded = upload_dir_to_s3(
-        #     local_dated,
-        #     bucket=config.s3.bucket_name,  # keep your S3Config names
-        #     prefix_root=config.s3.prefix,
-        #     d=bucket_date,
-        #     tag_keys=getattr(config.s3, "tag_keys", []),
-        #     srp_data=srp_data,
-        # )
+        print(f"Mirrored extracted files to: {local_dated}")
+        uploaded = upload_dir_to_s3(
+            local_dated,
+            bucket=config.s3.bucket_name,  # keep your S3Config names
+            prefix_root=config.s3.prefix,
+            d=bucket_date,
+            tag_keys=getattr(config.s3, "tag_keys", []),
+            srp_data=srp_data,
+        )
 
-        # write_manifest_ndjson(
-        #     bucket=config.s3.bucket_name,
-        #     prefix_root=config.s3.prefix,
-        #     d=bucket_date,
-        #     srp_data=srp_data,
-        #     uploaded_keys=uploaded,
-        # )
+        write_manifest_ndjson(
+            bucket=config.s3.bucket_name,
+            prefix_root=config.s3.prefix,
+            d=bucket_date,
+            srp_data=srp_data.model_dump(),
+            uploaded_keys=uploaded,
+        )
 
 
 def _parse_us_datetime_with_suffix(s: str) -> Optional[date]:
